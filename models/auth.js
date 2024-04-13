@@ -9,6 +9,7 @@ const userSchema = mongoose.Schema({
     joinedOn: {type: Date, default: Date.now },
     plan: { type: String, default: 'FREE' }, // Add this line
     noOfQuestions: { type: Number, default: 0 }, // Add this line
+    
 })
 
 

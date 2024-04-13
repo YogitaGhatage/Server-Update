@@ -1,7 +1,7 @@
 import Questions from '../models/Questions.js'
 import mongoose from 'mongoose'
 import User from '../models/auth.js';
-//import Subscription from '../models/Subscription.js';
+
 
 export const AskQuestion = async (req, res) => {
    const postQuestionData = req.body;
@@ -91,30 +91,7 @@ export const voteQuestion = async (req, res) => {
 }
 
 
-// export const checkQuestionLimit = async (req, res) => {
-//    const userId = req.userId;
- 
-//    try {
-//      // Find the user's subscription
-//      const user = await User.findById(userId).populate('subscription');
- 
-//      // If no subscription found, assume the user is on the FREE plan
-//      const plan = user.subscription ? user.subscription.plan : USER_PLAN.FREE;
- 
-//      // Get the questions limit for the user's plan
-//      const questionsLimit = QUESTIONS_LIMIT[plan];
- 
-//      // Get the count of questions asked by the user
-//      const questionsAsked = await Questions.countDocuments({ userId });
- 
-//      const isLimitReached = questionsAsked >= questionsLimit;
- 
-//      res.status(200).json({ isLimitReached });
-//    } catch (error) {
-//      console.log(error);
-//      res.status(500).json({ message: 'Something went wrong' });
-//    }
-//  };
+
 
 
 
