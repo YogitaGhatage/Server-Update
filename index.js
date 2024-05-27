@@ -1,3 +1,4 @@
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -13,192 +14,154 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import Filter from 'bad-words';
 
-
 import userRoutes from './routes/users.js';
 import questionRoutes from './routes/Questions.js';
 import answerRoutes from './routes/Answers.js';
 import User from './models/auth.js';
-
-
-
-
 
 const app = express();
 
 dotenv.config();
 app.use(express.json({ limit: '30mb', extended: true }));
 app.use(express.urlencoded({ limit: '30mb', extended: true }));
-app.use(express.urlencoded({ extended: false }));
-app.use(express.static('public'));
 app.use(cors());
 app.use(bodyParser.json());
-
 
 app.get('/', (req, res) => {
   res.send('This is a stack overflow clone API');
 });
-
 
 app.use('/user', userRoutes);
 app.use('/questions', questionRoutes);
 app.use('/api', questionRoutes);
 app.use('/answer', answerRoutes);
 
-
-
-
 const PORT = process.env.PORT || 5000;
-
 const DATABASE_URL = process.env.CONNECTION_URL;
 
 mongoose
   .connect(DATABASE_URL, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(async () => {
-    // Update users who don't have a plan set or have an invalid plan value
     await User.updateMany(
       { $or: [{ plan: { $exists: false } }, { plan: { $nin: ['FREE', 'SILVER', 'GOLD'] } }] },
       { $set: { plan: 'FREE', noOfQuestions: 0 } }
     );
 
-    // Update users with 'SILVER' plan
-    await User.updateMany(
-      { plan: 'SILVER' },
-      { $set: { noOfQuestions: 0 } }
-    );
-
-    // Update users with 'GOLD' plan
-    await User.updateMany(
-      { plan: 'GOLD' },
-      { $set: { noOfQuestions: Infinity } }
-    );
+    await User.updateMany({ plan: 'SILVER' }, { $set: { noOfQuestions: 0 } });
+    await User.updateMany({ plan: 'GOLD' }, { $set: { noOfQuestions: Infinity } });
 
     app.listen(PORT, () => console.log(`server running on port ${PORT}`));
   })
   .catch((err) => console.log(err.message));
 
+const sharedContentSchema = new mongoose.Schema({
+  text: String,
+  image: String,
+  video: String,
+  audio: String,
+  pdf: String,
+});
 
+const SharedContent = mongoose.model('SharedContent', sharedContentSchema);
 
-  
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadDir = path.resolve('uploads');
+const imageUploadDir = path.resolve(uploadDir, 'images');
+const videoUploadDir = path.resolve(uploadDir, 'videos');
+const audioUploadDir = path.resolve(uploadDir, 'audios');
+const pdfUploadDir = path.resolve(uploadDir, 'pdfs');
 
-  const sharedContentSchema = new mongoose.Schema({
-    text: String,
-    image: String,
-    video: String,
-    audio: String, 
-  pdf: String, 
+const ensureDirectoriesExist = (dirs) => {
+  dirs.forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
   });
-  
-  const SharedContent = mongoose.model('SharedContent', sharedContentSchema);
+};
 
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ensureDirectoriesExist([uploadDir, imageUploadDir, videoUploadDir, audioUploadDir, pdfUploadDir]);
 
-  const uploadDir = path.resolve('uploads');
-  const imageUploadDir = path.resolve(uploadDir, 'images');
-  const videoUploadDir = path.resolve(uploadDir, 'videos');
-  const audioUploadDir = path.resolve(uploadDir, 'audios');
-  const pdfUploadDir = path.resolve(uploadDir, 'pdfs');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    let uploadPath;
+    switch (file.fieldname) {
+      case 'image':
+        uploadPath = imageUploadDir;
+        break;
+      case 'video':
+        uploadPath = videoUploadDir;
+        break;
+      case 'audio':
+        uploadPath = audioUploadDir;
+        break;
+      case 'pdf':
+        uploadPath = pdfUploadDir;
+        break;
+      default:
+        break;
+    }
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const extension = path.extname(file.originalname);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${extension}`);
+  },
+});
 
-// Create the uploads directory if it doesn't exist
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+const upload = multer({ storage });
 
-// Create the image upload directory if it doesn't exist
-if (!fs.existsSync(imageUploadDir)) {
-  fs.mkdirSync(imageUploadDir);
-}
-
-// Create the video upload directory if it doesn't exist
-if (!fs.existsSync(videoUploadDir)) {
-  fs.mkdirSync(videoUploadDir);
-}
-
-// Create the audio upload directory if it doesn't exist
-if (!fs.existsSync(audioUploadDir)) {
-  fs.mkdirSync(audioUploadDir);
-}
-
-// Create the PDF upload directory if it doesn't exist
-if (!fs.existsSync(pdfUploadDir)) {
-  fs.mkdirSync(pdfUploadDir);
-}
-
-  
-  // Set up Multer for file uploads
-  const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      let uploadPath;
-      switch (file.fieldname) {
-        case 'image':
-          uploadPath = path.join(__dirname, 'uploads', 'images');
-          break;
-        case 'video':
-          uploadPath = path.join(__dirname, 'uploads', 'videos');
-          break;
-        case 'audio':
-          uploadPath = path.join(__dirname, 'uploads', 'audios');
-          break;
-        case 'pdf':
-          uploadPath = path.join(__dirname, 'uploads', 'pdfs');
-          break;
-        default:
-          break;
-      }
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      const extension = path.extname(file.originalname);
-      cb(null, `${file.fieldname}-${uniqueSuffix}${extension}`);
-    },
-  });
-  
-  const upload = multer({ storage });
-  
-  // Serve static files (images and videos)
-  app.use('/uploads/images', express.static(imageUploadDir));
+app.use('/uploads/images', express.static(imageUploadDir));
 app.use('/uploads/videos', express.static(videoUploadDir));
 app.use('/uploads/audios', express.static(audioUploadDir));
 app.use('/uploads/pdfs', express.static(pdfUploadDir));
-  
-  // Share content
-  app.post('/api/share', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), async (req, res) => {
-    const { text } = req.body;
-    const image = req.files?.image?.[0]?.filename ? `images/${req.files.image[0].filename}` : null;
-    const video = req.files?.video?.[0]?.filename ? `videos/${req.files.video[0].filename}` : null;
-    const audio = req.files?.audio?.[0]?.filename ? `audios/${req.files.audio[0].filename}` : null;
-    const pdf = req.files?.pdf?.[0]?.filename ? `pdfs/${req.files.pdf[0].filename}` : null;
 
-  // Create a new instance of the Filter class
+app.post('/api/share', upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'video', maxCount: 1 },
+  { name: 'audio', maxCount: 1 },
+  { name: 'pdf', maxCount: 1 }
+]), async (req, res) => {
+  const { text } = req.body;
+  const image = req.files?.image?.[0]?.filename ? `images/${req.files.image[0].filename}` : null;
+  const video = req.files?.video?.[0]?.filename ? `videos/${req.files.video[0].filename}` : null;
+  const audio = req.files?.audio?.[0]?.filename ? `audios/${req.files.audio[0].filename}` : null;
+  const pdf = req.files?.pdf?.[0]?.filename ? `pdfs/${req.files.pdf[0].filename}` : null;
+
   const filter = new Filter();
-  // Add offensive words you want to filter
-  filter.addWords('Fuck', 'Chutiya', 'Dyke', 'Shit', 'Cunt', 'Bugger', 'Dick' , 'Bollocks', 'Bitch','Piss off','Son of a bitch','Asshole',
-  'Bullshit','Hell', 'Piss','Bastard','Damn','Talking shit','Motherfucker','Bloody','Feck','Harami','Kutta','Suar ki aulad','Napoonsak',
-  'Raand','Bhenchod','Madarchod','Madarjaat','Bhosdike','Sabka Bhosda','Tera Bhosda','Mera Bhosda','Haramkhor','Gaandu','Hijade','Maa ka bhosda','Teri Maa ki chuth');
+  filter.addWords('Fuck', 'Chutiya', 'Dyke', 'Shit', 'Cunt', 'Bugger', 'Dick', 'Bollocks', 'Bitch', 'Piss off', 'Son of a bitch', 'Asshole', 'Bullshit', 'Hell', 'Piss', 'Bastard', 'Damn', 'Talking shit', 'Motherfucker', 'Bloody', 'Feck', 'Harami', 'Kutta', 'Suar ki aulad', 'Napoonsak', 'Raand', 'Bhenchod', 'Madarchod', 'Madarjaat', 'Bhosdike', 'Sabka Bhosda', 'Tera Bhosda', 'Mera Bhosda', 'Haramkhor', 'Gaandu', 'Hijade', 'Maa ka bhosda', 'Teri Maa ki chuth');
 
-   // Clean the text only if it's not empty or null
-   const cleanedText = text ? filter.clean(text) : text;
+  const cleanedText = text ? filter.clean(text) : text;
 
-  
+  const sharedContent = new SharedContent({ text: cleanedText, image, video, audio, pdf });
+  await sharedContent.save();
 
-    const sharedContent = new SharedContent({ text: cleanedText, image, video, audio, pdf });
-    await sharedContent.save();
-  
+  res.json(sharedContent);
+});
+
+app.get('/api/content', async (req, res) => {
+  try {
+    const sharedContent = await SharedContent.find();
     res.json(sharedContent);
-  });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   
-  // Get shared content
-  app.get('/api/content', async (req, res) => {
-    try {
-      const sharedContent = await SharedContent.find();
-      res.json(sharedContent);
-    } catch (err) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-
-
 
 
 // Initialize OpenAI with API key from environment variables
